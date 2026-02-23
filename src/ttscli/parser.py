@@ -8,6 +8,11 @@ SEGMENT_RE = re.compile(
     r'(?:\s+\*\*(\w+)\*\*)?\s+(.*)'
 )
 
+# Matches sttcli gender rows:
+#   | Gender   | male |          → global gender (no diarization)
+#   | speaker_0_gender | female | → per-speaker gender
+_GENDER_RE = re.compile(r'^\|\s*([\w]+_gender|Gender)\s*\|\s*(\w+)\s*\|')
+
 
 def _parse_time(ts: str) -> float:
     parts = ts.strip().split(":")
@@ -28,6 +33,8 @@ def parse(path: Path | str) -> ParsedTranscript:
     model = ""
     language = ""
     duration = 0.0
+    global_gender: str | None = None
+    speaker_genders: dict[str, str] = {}
 
     for line in lines:
         stripped = line.strip()
@@ -49,6 +56,15 @@ def parse(path: Path | str) -> ParsedTranscript:
             parts = stripped.split("|")
             if len(parts) >= 3:
                 duration = _parse_time(parts[2].strip())
+        else:
+            m = _GENDER_RE.match(stripped)
+            if m:
+                key, value = m.group(1), m.group(2).lower()
+                if key.lower() == "gender":
+                    global_gender = value
+                elif key.endswith("_gender"):
+                    speaker = key[: -len("_gender")]
+                    speaker_genders[speaker] = value
 
     segments: list[Segment] = []
     for line in lines:
@@ -59,7 +75,20 @@ def parse(path: Path | str) -> ParsedTranscript:
             speaker = m.group(3) or None
             seg_text = m.group(4).strip()
             if seg_text:
-                segments.append(Segment(start=start, end=end, speaker=speaker, text=seg_text))
+                # Resolve gender for this segment
+                if speaker and speaker in speaker_genders:
+                    seg_gender = speaker_genders[speaker]
+                else:
+                    seg_gender = global_gender
+                segments.append(
+                    Segment(
+                        start=start,
+                        end=end,
+                        speaker=speaker,
+                        text=seg_text,
+                        gender=seg_gender,
+                    )
+                )
 
     meta = TranscriptMeta(
         provider=provider,
@@ -67,5 +96,7 @@ def parse(path: Path | str) -> ParsedTranscript:
         language=language,
         duration=duration,
         source_file=source_file,
+        gender=global_gender,
+        speaker_genders=speaker_genders,
     )
     return ParsedTranscript(meta=meta, segments=segments)

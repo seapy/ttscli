@@ -7,6 +7,7 @@ class Segment:
     end: float
     speaker: str | None
     text: str
+    gender: str | None = field(default=None)
 
     @property
     def duration(self) -> float:
@@ -20,6 +21,8 @@ class TranscriptMeta:
     language: str
     duration: float
     source_file: str
+    gender: str | None = field(default=None)
+    speaker_genders: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

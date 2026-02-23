@@ -75,6 +75,38 @@ ttscli convert transcript.md --mode timed
 ttscli convert transcript.md --mode natural
 ```
 
+### Gender-based voice selection
+
+When the input transcript contains gender metadata (produced by sttcli), ttscli automatically selects a gender-appropriate voice for each segment. No configuration is required.
+
+| Provider | male (default) | female (default) |
+|---|---|---|
+| `elevenlabs` | Antoni (`ErXwobaYiN019PkySvjV`) | Rachel (`21m00Tcm4TlvDq8ikWAM`) |
+| `gemini` | Charon | Kore |
+| `minimax` | `male-qn-qingse` | `female-shaonv` |
+
+To override the gender-default voices, add `male_voice` / `female_voice` to `~/.ttscli.toml`:
+
+```toml
+[elevenlabs]
+male_voice = "TxGEqnHWrfWFTfGW9XjX"
+female_voice = "EXAVITQu4vr4xnSDxMaL"
+
+[gemini]
+male_voice = "Fenrir"
+female_voice = "Aoede"
+
+[minimax]
+male_voice = "male-qn-jingying"
+female_voice = "female-yujie"
+```
+
+Voice selection priority (highest to lowest):
+1. `--speaker-voice SPEAKER=VOICE` or config `[speakers]`
+2. `--voice` or config `default_voice`
+3. Gender-based default (from transcript metadata)
+4. First available voice from provider
+
 ### Speaker voice mapping
 
 Assign different voices per speaker:

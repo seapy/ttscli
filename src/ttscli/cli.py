@@ -24,6 +24,35 @@ from ttscli.providers import get_provider
 
 err_console = Console(stderr=True)
 
+# Default voices to use when gender is known but no explicit voice is configured.
+# Users can override per-provider via `male_voice` / `female_voice` in ~/.ttscli.toml.
+_GENDER_VOICES: dict[str, dict[str, str]] = {
+    "elevenlabs": {
+        "male": "ErXwobaYiN019PkySvjV",   # Antoni
+        "female": "21m00Tcm4TlvDq8ikWAM",  # Rachel
+    },
+    "gemini": {
+        "male": "Charon",
+        "female": "Kore",
+    },
+    "minimax": {
+        "male": "male-qn-qingse",
+        "female": "female-shaonv",
+    },
+}
+
+
+def _resolve_gender_voice(
+    provider_name: str, gender: str | None, provider_cfg: dict
+) -> str | None:
+    """Return a voice ID/name matching *gender*, respecting config overrides."""
+    if not gender:
+        return None
+    config_key = f"{gender}_voice"
+    if config_key in provider_cfg:
+        return provider_cfg[config_key]
+    return _GENDER_VOICES.get(provider_name, {}).get(gender)
+
 
 def _fmt_time(seconds: float) -> str:
     total = int(seconds)
@@ -181,10 +210,15 @@ def convert(
             )
 
             for i, segment in enumerate(segs_to_process):
-                # Resolve voice for this segment
+                # Resolve voice for this segment:
+                # 1. explicit speaker→voice map (CLI or config)
+                # 2. global --voice / config default_voice
+                # 3. gender-based default (from transcript metadata)
+                # 4. first available voice from provider
                 seg_voice = (
                     full_speaker_map.get(segment.speaker or "")
                     or effective_voice
+                    or _resolve_gender_voice(provider_name, segment.gender, provider_cfg)
                 )
                 if not seg_voice:
                     available = provider.list_voices()

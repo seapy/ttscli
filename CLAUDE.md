@@ -42,7 +42,7 @@ transcript.md → parser.py → ParsedTranscript
 
 ### Key modules
 
-**`parser.py`** — Parses sttcli markdown into `ParsedTranscript`. The regex `SEGMENT_RE` matches `**[MM:SS → MM:SS]** **speaker** text` lines. Both `MM:SS` and `HH:MM:SS` are supported.
+**`parser.py`** — Parses sttcli markdown into `ParsedTranscript`. The regex `SEGMENT_RE` matches `**[MM:SS → MM:SS]** **speaker** text` lines. Both `MM:SS` and `HH:MM:SS` are supported. Also parses gender metadata rows from the header table (`| Gender | male |` for single-speaker, `| speaker_0_gender | male |` for diarized) and assigns `Segment.gender` accordingly.
 
 **`audio.py`** — Two assembly strategies:
 - `assemble_timed`: creates a silence buffer of `total_duration`, overlays each segment's audio at `segment.start` position (pydub overlay). Gaps between segments become natural silence.
@@ -52,7 +52,13 @@ transcript.md → parser.py → ParsedTranscript
 
 **`providers/`** — ABC `BaseTTSProvider` with `synthesize(text, voice, speed, output_path, step) -> float` (returns actual audio duration). Key property: `supports_speed_param` — if `False`, speed adjustment is done via ffmpeg post-processing in `cli.py` instead of API parameter.
 
-**`cli.py`** — The `convert` command handles: speaker→voice resolution (CLI `--speaker-voice` > config `[speakers]` > `--voice` > config `default_voice`), per-segment speed calculation, chunk splitting for long texts, time-stretch fallback, and final assembly. Failed segments (e.g. Gemini rejecting very short texts) are warned and skipped rather than aborting.
+**`cli.py`** — The `convert` command handles: speaker→voice resolution (CLI `--speaker-voice` > config `[speakers]` > `--voice` > config `default_voice` > **gender-based default**), per-segment speed calculation, chunk splitting for long texts, time-stretch fallback, and final assembly. Failed segments (e.g. Gemini rejecting very short texts) are warned and skipped rather than aborting.
+
+Voice selection priority:
+1. `--speaker-voice SPEAKER=VOICE` or config `[speakers]`
+2. `--voice` / `--voice-id` or config `default_voice`
+3. Gender-based default — reads `Segment.gender` (populated by parser from sttcli metadata); built-in defaults in `_GENDER_VOICES`, overridable via `male_voice` / `female_voice` in `~/.ttscli.toml`
+4. First voice from `provider.list_voices()`
 
 ### Provider notes
 
@@ -68,17 +74,23 @@ transcript.md → parser.py → ParsedTranscript
 [elevenlabs]
 api_key = "..."
 default_voice_id = "..."
+male_voice = "ErXwobaYiN019PkySvjV"   # Antoni (default)
+female_voice = "21m00Tcm4TlvDq8ikWAM" # Rachel (default)
 
 [gemini]
 api_key = "..."
 default_voice = "Kore"
+male_voice = "Charon"   # default
+female_voice = "Kore"   # default
 
 [minimax]
 api_key = "..."
 group_id = "..."
+male_voice = "male-qn-qingse"   # default
+female_voice = "female-shaonv"  # default
 
 [speakers]
-speaker_0 = "<voice-id>"
+speaker_0 = "<voice-id>"   # explicit per-speaker mapping overrides gender defaults
 speaker_1 = "<voice-id>"
 ```
 
